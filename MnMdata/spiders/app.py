@@ -1,0 +1,229 @@
+import streamlit as st
+import subprocess
+from pymongo import MongoClient
+from docx import Document
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.shared import Pt
+import io
+import os
+
+MONGO_URI = os.getenv('MONGO_URI')
+
+# MongoDB connection setup
+client = MongoClient(MONGO_URI)
+db = client['MnMdata']
+collection = db['structured_headings']
+
+# Function to run the Scrapy spider with a dynamic URL
+def run_scrapy_spider(url):
+    try:
+        # Pass the user-provided URL to the Scrapy spider using subprocess
+        subprocess.run(["scrapy", "crawl", "da", "-a", f"url={url}"], check=True)
+        st.success("Scraping completed successfully!")
+    except subprocess.CalledProcessError as e:
+        st.error(f"An error occurred during scraping: {e}")
+
+# Load the document after scraping
+def load_document():
+    document = collection.find_one(sort=[('_id', -1)])
+    if not document:
+        st.error("No data found in MongoDB. Please scrape the data first.")
+        return None
+    return document
+
+# Load the existing document template
+doc = Document(r'C:\Users\admin\Desktop\SQ\toc.docx')
+
+# Function to determine the heading level based on the number of periods in the string
+def level(i):
+    j = i.split(" ", 1)[0]
+    dot = j.count(".")
+    return dot 
+
+# Function to clean chapter names by removing (Page No.) sections
+def clean(name):
+    a = name.split(" ", 1)[1]
+    if "(Page No." in a:
+        a = a.split(" (Page No.", 1)[0].strip() 
+    if "introduction" == a.lower(): 
+        a = "Market Overview"
+    if "KEY STAKEHOLDERS" in a:
+        a = "CUSTOMER & BUYING CRITERIA ANALYSIS"
+    a = a.title()
+    return a
+
+# UI for scraping and generating the TOC document
+st.title("TOC Generator with Scrapy and Streamlit")
+
+# User input for URL
+url = st.text_input("Enter the URL to scrape", "https://www.marketsandmarkets.com/Market-Reports/mobile-robots-market-43703276.html")
+
+# Button to run the Scrapy spider
+if st.button("Scrape Data"):
+    if url:
+        run_scrapy_spider(url)
+    else:
+        st.error("Please enter a valid URL.")
+
+# After scraping, load the document
+document = load_document()
+
+# Proceed only if the document is loaded
+if document:
+    # Initialize TOC content with sample data
+    toc_content = []
+
+    keywords = [
+        "VALUE CHAIN ANALYSIS",
+        "SUPPLY CHAIN ANALYSIS",
+        "TECHNOLOGY ANALYSIS",
+        "REGULATORY LANDSCAPE",
+        "PATENT ANALYSIS",
+        "TRADE ANALYSIS",
+        "PRICING ANALYSIS",
+        "CASE STUDY",
+        "TECHNOLOGY TRENDS",
+        "KEY STAKEHOLDERS AND BUYING CRITERIA",
+        "KEY STAKEHOLDERS & BUYING CRITERIA",
+    ]
+    
+    # List to store unique values
+    for chapter in document.get('chapters', []):
+        if "MARKET OVERVIEW" in chapter['chapter'] or "PREMIUM INSIGHTS" in chapter['chapter']:
+            
+            for subsection in chapter.get('sub_sections', []):
+                if any(keyword in subsection.upper() for keyword in keywords):
+                    if subsection.count(".") == 1:
+                        toc_content.append((clean(subsection), level(subsection)))
+
+    # Streamlit app to select chapters
+    arr = []
+    for chapter in document.get('chapters', []):
+        arr.append(chapter['chapter'])  
+
+    st.write("Select main chapter")
+    select_box = st.multiselect("Select chapter", arr)
+
+    if select_box:
+        for selected in select_box:    
+            for chapter in document.get('chapters', []):
+                if selected in chapter['chapter']: 
+                    toc_content.append((clean(chapter['chapter']), level(chapter['chapter'])))
+                    
+                    # Loop through sub-sections and add to TOC
+                    for subsection in chapter.get('sub_sections', []):
+                        toc_content.append((clean(subsection), level(subsection))) 
+    else:
+        st.write("No chapters selected.")
+
+    # Region-specific TOC content
+    region_toc = [
+        ('Mobile Robots Market Size by Region', 0),
+        ('Market Overview', 1),
+        ('North America', 1),
+        ('USA', 2),
+        ('Canada', 2),
+        ('Europe', 1),
+        ('Germany', 2),
+        ('Spain', 2),
+        ('France', 2),
+        ('UK', 2),
+        ('Italy', 2),
+        ('Rest of Europe', 2),
+        ('Asia Pacific', 1),
+        ('China', 2),
+        ('India', 2),
+        ('Japan', 2),
+        ('South Korea', 2),
+        ('Rest of Asia-Pacific', 2),
+        ('Latin America', 1),
+        ('Brazil', 2),
+        ('Rest of Latin America', 2),
+        ('Middle East & Africa (MEA)', 1),
+        ('GCC Countries', 2),
+        ('South Africa', 2),
+        ('Rest of MEA', 2),
+        ('Competitive Landscape', 0),
+        ('Top 5 Player Comparison', 1),
+        ('Market Positioning of Key Players, 2023', 1),
+        ('Strategies Adopted by Key Market Players', 1),
+        ('Recent Activities in the Market', 1),
+        ('Key Companies Market Share (%), 2023', 1),
+        ('Key Company Profiles', 0)
+    ]
+
+    # Company-specific TOC content
+    company_toc = []
+
+    def company_level(d):
+        c = d.split(" ", 1)[0]
+        dot = c.count(".")
+        return dot - 1
+
+    for chapter in document.get('chapters', []):
+        if "COMPANY PROFILE" in chapter['chapter']:
+            
+            for subsection in chapter.get('sub_sections', []):
+                if "KEY PLAYERS" in subsection:
+                    continue
+                if "OTHER" in subsection or "STARTUP" in subsection:
+                    company_toc.append((clean(subsection), company_level(subsection)))
+                elif subsection.count(".") == 2:
+                    company_toc.append((clean(subsection), company_level(subsection)))
+                    
+                    # Append the additional sections with level 2 for each company profile
+                    company_toc.append(("Company Overview", 2))
+                    company_toc.append(("Business Segment Overview", 2))
+                    company_toc.append(("Financial Updates", 2))
+                    company_toc.append(("Key Developments", 2))
+
+    # Function to add bullet points with multi-levels to an existing document
+    def add_bullet_point_text(text, level):
+        paragraph = doc.add_paragraph(text)
+        paragraph.style = 'List Paragraph'
+        
+        # Add custom bullet points using numbering properties for multi-level bullets
+        numbering = paragraph._element.get_or_add_pPr().get_or_add_numPr()
+        
+        # Define list levels for multi-level bullets
+        numId = OxmlElement('w:numId')
+        numId.set(qn('w:val'), '1')  
+        
+        ilvl = OxmlElement('w:ilvl')
+        ilvl.set(qn('w:val'), str(level))  
+        
+        numbering.append(numId)
+        numbering.append(ilvl)
+
+        # Set font size, type, and bold for level 0
+        run = paragraph.runs[0]
+        run.font.size = Pt(11)
+        run.font.name = 'Calibri'
+        
+        if level == 0:
+            run.bold = True
+        
+        # Set line spacing to 1.5
+        paragraph_format = paragraph.paragraph_format
+        paragraph_format.line_spacing = 1.5  
+
+    # Combine TOC content
+    toc_content = toc_content + region_toc + company_toc
+
+    # Adding TOC content to the loaded document
+    for heading, level in toc_content:
+        add_bullet_point_text(heading, level)
+
+    # Save the document to an in-memory file (using io.BytesIO)
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)  
+
+    # Provide a download button for the document
+    st.download_button(
+        label="Download Document",
+        data=buffer,
+        file_name="toc_document.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
