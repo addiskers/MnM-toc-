@@ -32,8 +32,11 @@ def load_document():
         return None
     return document
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+doc_path = os.path.join(BASE_DIR, 'toc.docx')
+
 # Load the existing document template
-doc = Document(r'C:\Users\admin\Desktop\SQ\toc.docx')
+doc = Document(doc_path)
 
 # Function to determine the heading level based on the number of periods in the string
 def level(i):
