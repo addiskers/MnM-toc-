@@ -119,7 +119,28 @@ if document:
                         toc_content.append((clean(subsection), level(subsection))) 
     else:
         st.write("No chapters selected.")
+    if "toc_entries" not in st.session_state:
+        st.session_state["toc_entries"] = []
 
+    # Function to add a new TOC entry
+    def add_toc_entry():
+        name = st.session_state["new_heading"].title()
+        level = st.session_state["new_level"]
+        
+        if name:
+            st.session_state["toc_entries"].append((name, level))
+
+    st.text_input("Enter heading or subheading", key="new_heading")
+    st.selectbox("Select level", [0, 1, 2, 3, 4, 5, 6], key="new_level")
+
+    if st.button("Add Chapter/Subheading"):
+        add_toc_entry()
+    if st.session_state["toc_entries"]:
+        st.write("Current TOC Structure:")
+        for entry in st.session_state["toc_entries"]:
+            st.write(f"{entry[0]} (Level {entry[1]})")
+    print (st.session_state["toc_entries"])  
+      
     # Region-specific TOC content
     region_toc = [
         ('Mobile Robots Market Size by Region', 0),
@@ -212,7 +233,7 @@ if document:
         paragraph_format.line_spacing = 1.5  
 
     # Combine TOC content
-    toc_content = toc_content + region_toc + company_toc
+    toc_content = toc_content +st.session_state["toc_entries"]+ region_toc + company_toc
 
     # Adding TOC content to the loaded document
     for heading, level in toc_content:
@@ -230,3 +251,5 @@ if document:
         file_name="toc_document.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
+
+
