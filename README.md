@@ -75,4 +75,6 @@ This project provides an automated Table of Contents (TOC) generator for MnM (Ma
 - Add support for scraping more report formats.
 - Improve chapter identification for cleaner selection.
 
+## New Features Addded (13/9/24)
+- Added custom heading and subheading input box for user
 ---
