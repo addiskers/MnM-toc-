@@ -1,4 +1,5 @@
 import scrapy
+import unicodedata
 import os
 from w3lib.html import remove_tags
 import re
