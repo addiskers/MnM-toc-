@@ -25,14 +25,15 @@ class DaSpider(scrapy.Spider):
             self.start_urls = [url]
 
     def parse(self, response):
-        content = response.css('div.tab-pane#tab_default_2').xpath('.//strong//text() | .//text()').getall()
+        content = response.css('div.tab-pane#tab_default_2').xpath('.//text()').getall()
 
         if content:
-            structured_content = self.merge_strong_texts(content)
-            
-            structured_content = normalize_json(structured_content)
+            cleaned_content = [remove_tags(line).strip() for line in content]
+            structured_content = [line.strip() for line in cleaned_content if line and not line.lower().startswith(('figure', 'table'))]
+            merged_content = self.merge_non_numbered_lines(structured_content)
 
-            structured_content = [line.strip() for line in structured_content if line and not line.lower().startswith(('figure', 'table'))]
+            
+            structured_content = normalize_json(merged_content)
 
             filtered_headings = self.filter_headings(self.parse_headings(structured_content))
 
@@ -53,26 +54,29 @@ class DaSpider(scrapy.Spider):
         else:
             self.log('Failed to retrieve content.')
 
-    def merge_strong_texts(self, content):
+    def merge_non_numbered_lines(self, structured_content):
+        """
+        This function combines lines that don't start with a number with the previous numbered line.
+        """
+        pattern = re.compile(r'^\d+(\.\d+)*')  # Regex to check if the line starts with a number
         merged_content = []
-        buffer = ""
+        current_entry = ""
 
-        for line in content:
-            clean_line = remove_tags(line).strip()
-
-            clean_line = clean_line.replace('\u00a0', ' ')
-
-            if buffer:
-                if clean_line and clean_line[0].isdigit(): 
-                    merged_content.append(buffer)  
-                    buffer = clean_line  
-                else:
-                    buffer += " " + clean_line  
+        for line in structured_content:
+            # Check if the line starts with a number
+            if pattern.match(line):
+                # If there's an existing entry, append it to the list
+                if current_entry:
+                    merged_content.append(current_entry)
+                # Start a new entry with this line
+                current_entry = line
             else:
-                buffer = clean_line 
+                # If it doesn't start with a number, append it to the previous entry
+                current_entry += " " + line
 
-        if buffer:  
-            merged_content.append(buffer)
+        # Add the last entry to the list
+        if current_entry:
+            merged_content.append(current_entry)
 
         return merged_content
 
