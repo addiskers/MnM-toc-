@@ -13,12 +13,11 @@ MONGO_URI = os.getenv('MONGO_URI')
 # MongoDB connection setup
 client = MongoClient(MONGO_URI)
 db = client['MnMdata']
-collection = db['structured_headings']
+collection = db['MnM']
 
 # Function to run the Scrapy spider with a dynamic URL
 def run_scrapy_spider(url):
     try:
-        # Pass the user-provided URL to the Scrapy spider using subprocess
         subprocess.run(["scrapy", "crawl", "da", "-a", f"url={url}"], check=True)
         st.success("Scraping completed successfully!")
     except subprocess.CalledProcessError as e:
@@ -57,10 +56,10 @@ def clean(name):
     return a
 
 # UI for scraping and generating the TOC document
-st.title("TOC Generator with Scrapy and Streamlit")
+st.title("TOC Generator V@2")
 
 # User input for URL
-url = st.text_input("Enter the URL to scrape", "https://www.marketsandmarkets.com/Market-Reports/mobile-robots-market-43703276.html")
+url = st.text_input("Enter the URL to scrape")
 
 # Button to run the Scrapy spider
 if st.button("Scrape Data"):
@@ -74,7 +73,6 @@ document = load_document()
 
 # Proceed only if the document is loaded
 if document:
-    # Initialize TOC content with sample data
     toc_content = []
 
     keywords = [
@@ -93,6 +91,9 @@ if document:
     
     # List to store unique values
     for chapter in document.get('chapters', []):
+        if ", BY REGION" in chapter['chapter']:
+            market_name=clean(chapter['chapter'].split(",",1)[0])
+            print(market_name)
         if "MARKET OVERVIEW" in chapter['chapter'] or "PREMIUM INSIGHTS" in chapter['chapter']:
             
             for subsection in chapter.get('sub_sections', []):
@@ -114,7 +115,6 @@ if document:
                 if selected in chapter['chapter']: 
                     toc_content.append((clean(chapter['chapter']), level(chapter['chapter'])))
                     
-                    # Loop through sub-sections and add to TOC
                     for subsection in chapter.get('sub_sections', []):
                         toc_content.append((clean(subsection), level(subsection))) 
     else:
@@ -139,11 +139,11 @@ if document:
         st.write("Current TOC Structure:")
         for entry in st.session_state["toc_entries"]:
             st.write(f"{entry[0]} (Level {entry[1]})")
-    print (st.session_state["toc_entries"])  
+    print(st.session_state["toc_entries"])  
       
     # Region-specific TOC content
     region_toc = [
-        ('Mobile Robots Market Size by Region', 0),
+        (f'{market_name} Size by Region', 0),
         ('Market Overview', 1),
         ('North America', 1),
         ('USA', 2),
@@ -178,39 +178,28 @@ if document:
     ]
 
     # Company-specific TOC content
+    data = st.text_area("Enter Companies in BULLET format")
+    
     company_toc = []
+    if st.button("Add Companies"):
 
-    def company_level(d):
-        c = d.split(" ", 1)[0]
-        dot = c.count(".")
-        return dot - 1
-
-    for chapter in document.get('chapters', []):
-        if "COMPANY PROFILE" in chapter['chapter']:
-            
-            for subsection in chapter.get('sub_sections', []):
-                if "KEY PLAYERS" in subsection:
-                    continue
-                if "OTHER" in subsection or "STARTUP" in subsection:
-                    company_toc.append((clean(subsection), company_level(subsection)))
-                elif subsection.count(".") == 2:
-                    company_toc.append((clean(subsection), company_level(subsection)))
-                    
-                    # Append the additional sections with level 2 for each company profile
-                    company_toc.append(("Company Overview", 2))
-                    company_toc.append(("Business Segment Overview", 2))
-                    company_toc.append(("Financial Updates", 2))
-                    company_toc.append(("Key Developments", 2))
+        cleaned_data = data.replace('•', '').strip()
+        company_list = [line.strip() for line in cleaned_data.splitlines() if line.strip()]
+        
+        for company in company_list:
+            company_toc.append((company, 1))  
+            company_toc.append(("Company Overview", 2))
+            company_toc.append(("Business Segment Overview", 2))
+            company_toc.append(("Financial Updates", 2))
+            company_toc.append(("Key Developments", 2))
 
     # Function to add bullet points with multi-levels to an existing document
     def add_bullet_point_text(text, level):
         paragraph = doc.add_paragraph(text)
         paragraph.style = 'List Paragraph'
         
-        # Add custom bullet points using numbering properties for multi-level bullets
         numbering = paragraph._element.get_or_add_pPr().get_or_add_numPr()
         
-        # Define list levels for multi-level bullets
         numId = OxmlElement('w:numId')
         numId.set(qn('w:val'), '1')  
         
@@ -220,7 +209,6 @@ if document:
         numbering.append(numId)
         numbering.append(ilvl)
 
-        # Set font size, type, and bold for level 0
         run = paragraph.runs[0]
         run.font.size = Pt(11)
         run.font.name = 'Calibri'
@@ -228,14 +216,12 @@ if document:
         if level == 0:
             run.bold = True
         
-        # Set line spacing to 1.5
         paragraph_format = paragraph.paragraph_format
         paragraph_format.line_spacing = 1.5  
 
-    # Combine TOC content
-    toc_content = toc_content +st.session_state["toc_entries"]+ region_toc + company_toc
+    # Combine content
+    toc_content = toc_content + st.session_state["toc_entries"] + region_toc + company_toc
 
-    # Adding TOC content to the loaded document
     for heading, level in toc_content:
         add_bullet_point_text(heading, level)
 
@@ -251,5 +237,3 @@ if document:
         file_name="toc_document.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
-
-

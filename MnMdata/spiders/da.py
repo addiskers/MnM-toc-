@@ -6,37 +6,38 @@ import re
 from pymongo import MongoClient
 
 MONGO_URI = os.getenv('MONGO_URI')
+
 def normalize_json(data):
-        return [unicodedata.normalize('NFKD', item) if isinstance(item, str) else item for item in data]
+    return [unicodedata.normalize('NFKD', item) if isinstance(item, str) else item for item in data]
 
 class DaSpider(scrapy.Spider):
     name = 'da'
-    start_urls = ['https://www.marketsandmarkets.com/Market-Reports/mobile-robots-market-43703276.html']
+    start_urls = ['https://www.marketsandmarkets.com/Market-Reports/fats-oils-market-6198812.html']
 
     # MongoDB connection setup
     client = MongoClient(MONGO_URI)
     db = client['MnMdata']
-    collection = db['structured_headings']
-    
+    collection = db['MnM']
+
     def __init__(self, url=None, *args, **kwargs):
         super(DaSpider, self).__init__(*args, **kwargs)
         if url:
             self.start_urls = [url]
-            
+
     def parse(self, response):
-        content = response.css('div.tab-pane#tab_default_2').xpath('.//text()').getall()
+        content = response.css('div.tab-pane#tab_default_2').xpath('.//strong//text() | .//text()').getall()
 
         if content:
-            cleaned_content = [remove_tags(line).strip() for line in content]
-            structured_content = [line for line in cleaned_content if line and not line.lower().startswith(('figure', 'table'))]
-            structured_content = normalize_json(structured_content)
-            # Filter the headings using the defined methods
-            filtered_headings = self.filter_headings(self.parse_headings(structured_content))
+            structured_content = self.merge_strong_texts(content)
             
-            # Structure the filtered data into chapters and sub-sections
+            structured_content = normalize_json(structured_content)
+
+            structured_content = [line.strip() for line in structured_content if line and not line.lower().startswith(('figure', 'table'))]
+
+            filtered_headings = self.filter_headings(self.parse_headings(structured_content))
+
             structured_data = self.structure_data(filtered_headings)
 
-            # Prepare the document for MongoDB
             document = {"chapters": []}
             for chapter, content in structured_data.items():
                 document["chapters"].append({
@@ -44,19 +45,40 @@ class DaSpider(scrapy.Spider):
                     "sub_sections": content["sub_sections"]
                 })
 
-            # Insert the structured document into MongoDB
             self.collection.insert_one(document)
             self.log("Data inserted successfully into MongoDB")
 
-            # Verify insertion
             inserted_doc = self.collection.find_one()
             self.log(f"Inserted document: {inserted_doc}")
         else:
             self.log('Failed to retrieve content.')
 
+    def merge_strong_texts(self, content):
+        merged_content = []
+        buffer = ""
+
+        for line in content:
+            clean_line = remove_tags(line).strip()
+
+            clean_line = clean_line.replace('\u00a0', ' ')
+
+            if buffer:
+                if clean_line and clean_line[0].isdigit(): 
+                    merged_content.append(buffer)  
+                    buffer = clean_line  
+                else:
+                    buffer += " " + clean_line  
+            else:
+                buffer = clean_line 
+
+        if buffer:  
+            merged_content.append(buffer)
+
+        return merged_content
+
     def parse_headings(self, data):
         headings = {}
-        pattern = re.compile(r'^(\d+(\.\d+)*)')  # Pattern to match heading numbers
+        pattern = re.compile(r'^(\d+(\.\d+)*)') 
         
         for entry in data:
             match = pattern.match(entry)
