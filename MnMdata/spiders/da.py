@@ -5,6 +5,8 @@ import re
 from pymongo import MongoClient
 
 MONGO_URI = os.getenv('MONGO_URI')
+def normalize_json(data):
+        return [unicodedata.normalize('NFKD', item) if isinstance(item, str) else item for item in data]
 
 class DaSpider(scrapy.Spider):
     name = 'da'
@@ -26,7 +28,7 @@ class DaSpider(scrapy.Spider):
         if content:
             cleaned_content = [remove_tags(line).strip() for line in content]
             structured_content = [line for line in cleaned_content if line and not line.lower().startswith(('figure', 'table'))]
-
+            structured_content = normalize_json(structured_content)
             # Filter the headings using the defined methods
             filtered_headings = self.filter_headings(self.parse_headings(structured_content))
             
