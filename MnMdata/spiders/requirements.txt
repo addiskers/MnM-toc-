@@ -2,4 +2,3 @@ streamlit
 pymongo
 python-docx
 scrapy
-unicodedata
