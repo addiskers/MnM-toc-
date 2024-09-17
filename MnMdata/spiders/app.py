@@ -91,8 +91,8 @@ if document:
     
     # List to store unique values
     for chapter in document.get('chapters', []):
-        if ", BY REGION" in chapter['chapter']:
-            market_name=clean(chapter['chapter'].split(",",1)[0])
+        if "by region" in chapter['chapter']:
+            market_name=clean(chapter['chapter'].lower().split(", by region",1)[0])
             print(market_name)
         if "MARKET OVERVIEW" in chapter['chapter'] or "PREMIUM INSIGHTS" in chapter['chapter']:
             
