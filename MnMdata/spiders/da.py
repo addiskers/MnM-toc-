@@ -58,23 +58,18 @@ class DaSpider(scrapy.Spider):
         """
         This function combines lines that don't start with a number with the previous numbered line.
         """
-        pattern = re.compile(r'^\d+(\.\d+)*')  # Regex to check if the line starts with a number
+        pattern = re.compile(r'^\d+(\.\d+)*') 
         merged_content = []
         current_entry = ""
 
         for line in structured_content:
-            # Check if the line starts with a number
             if pattern.match(line):
-                # If there's an existing entry, append it to the list
                 if current_entry:
                     merged_content.append(current_entry)
-                # Start a new entry with this line
                 current_entry = line
             else:
-                # If it doesn't start with a number, append it to the previous entry
                 current_entry += " " + line
 
-        # Add the last entry to the list
         if current_entry:
             merged_content.append(current_entry)
 
