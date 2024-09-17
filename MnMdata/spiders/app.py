@@ -15,7 +15,6 @@ client = MongoClient(MONGO_URI)
 db = client['MnMdata']
 collection = db['MnM']
 
-# Function to run the Scrapy spider with a dynamic URL
 def run_scrapy_spider(url):
     try:
         subprocess.run(["scrapy", "crawl", "da", "-a", f"url={url}"], check=True)
@@ -23,7 +22,6 @@ def run_scrapy_spider(url):
     except subprocess.CalledProcessError as e:
         st.error(f"An error occurred during scraping: {e}")
 
-# Load the document after scraping
 def load_document():
     document = collection.find_one(sort=[('_id', -1)])
     if not document:
@@ -34,16 +32,13 @@ def load_document():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 doc_path = os.path.join(BASE_DIR, 'toc.docx')
 
-# Load the existing document template
 doc = Document(doc_path)
 
-# Function to determine the heading level based on the number of periods in the string
 def level(i):
     j = i.split(" ", 1)[0]
     dot = j.count(".")
     return dot 
 
-# Function to clean chapter names by removing (Page No.) sections
 def clean(name):
     a = name.split(" ", 1)[1]
     if "(Page No." in a:
@@ -55,23 +50,17 @@ def clean(name):
     a = a.title()
     return a
 
-# UI for scraping and generating the TOC document
 st.title("TOC Generator V@2")
-
-# User input for URL
 url = st.text_input("Enter the URL to scrape")
 
-# Button to run the Scrapy spider
 if st.button("Scrape Data"):
     if url:
         run_scrapy_spider(url)
     else:
         st.error("Please enter a valid URL.")
 
-# After scraping, load the document
 document = load_document()
 
-# Proceed only if the document is loaded
 if document:
     toc_content = []
 
@@ -89,7 +78,6 @@ if document:
         "KEY STAKEHOLDERS & BUYING CRITERIA",
     ]
     
-    # List to store unique values
     for chapter in document.get('chapters', []):
         if "by region" in chapter['chapter'].lower():
             market_name=clean(chapter['chapter'].lower().split(", by region",1)[0])
@@ -101,7 +89,6 @@ if document:
                     if subsection.count(".") == 1:
                         toc_content.append((clean(subsection), level(subsection)))
 
-    # Streamlit app to select chapters
     arr = []
     for chapter in document.get('chapters', []):
         arr.append(chapter['chapter'])  
@@ -122,7 +109,6 @@ if document:
     if "toc_entries" not in st.session_state:
         st.session_state["toc_entries"] = []
 
-    # Function to add a new TOC entry
     def add_toc_entry():
         name = st.session_state["new_heading"].title()
         level = st.session_state["new_level"]
@@ -141,7 +127,6 @@ if document:
             st.write(f"{entry[0]} (Level {entry[1]})")
     print(st.session_state["toc_entries"])  
       
-    # Region-specific TOC content
     region_toc = [
         (f'{market_name} Size by Region', 0),
         ('Market Overview', 1),
@@ -177,7 +162,6 @@ if document:
         ('Key Company Profiles', 0)
     ]
 
-    # Company-specific TOC content
     data = st.text_area("Enter Companies in BULLET format")
     
     company_toc = []
@@ -193,7 +177,6 @@ if document:
             company_toc.append(("Financial Updates", 2))
             company_toc.append(("Key Developments", 2))
 
-    # Function to add bullet points with multi-levels to an existing document
     def add_bullet_point_text(text, level):
         paragraph = doc.add_paragraph(text)
         paragraph.style = 'List Paragraph'
@@ -219,18 +202,14 @@ if document:
         paragraph_format = paragraph.paragraph_format
         paragraph_format.line_spacing = 1.5  
 
-    # Combine content
     toc_content = toc_content + st.session_state["toc_entries"] + region_toc + company_toc
 
     for heading, level in toc_content:
         add_bullet_point_text(heading, level)
 
-    # Save the document to an in-memory file (using io.BytesIO)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)  
-
-    # Provide a download button for the document
     st.download_button(
         label="Download Document",
         data=buffer,
