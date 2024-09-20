@@ -10,7 +10,6 @@ import os
 
 MONGO_URI = os.getenv('MONGO_URI')
 
-# MongoDB connection setup
 client = MongoClient(MONGO_URI)
 db = client['MnMdata']
 collection = db['MnM']
@@ -77,7 +76,7 @@ if document:
         "KEY STAKEHOLDERS AND BUYING CRITERIA",
         "KEY STAKEHOLDERS & BUYING CRITERIA",
     ]
-    
+    market_name="NONE"
     for chapter in document.get('chapters', []):
         if "by region" in chapter['chapter'].lower():
             market_name=clean(chapter['chapter'].lower().split(", by region",1)[0])
